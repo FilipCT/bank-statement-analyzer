@@ -501,16 +501,20 @@ def main():
 
             st.divider()
 
-            # Export button
+            # Export button - uses session state to avoid regenerating Excel on every render
             st.subheader("📥 Preuzmi")
-            df_export, _ = load_statement(selected_key)
-            if df_export is not None:
-                selected_name = next(p["name"] for p in saved_periods if p["key"] == selected_key)
-                excel_data = create_excel_export(df_export, selected_name)
+            if st.button("📊 Generiši Excel", use_container_width=True):
+                df_export, _ = load_statement(selected_key)
+                if df_export is not None:
+                    selected_name = next(p["name"] for p in saved_periods if p["key"] == selected_key)
+                    st.session_state['excel_data'] = create_excel_export(df_export, selected_name)
+                    st.session_state['excel_filename'] = f"izvod_{selected_key}.xlsx"
+
+            if 'excel_data' in st.session_state:
                 st.download_button(
-                    "📊 Excel fajl",
-                    excel_data,
-                    f"izvod_{selected_key}.xlsx",
+                    "⬇️ Preuzmi Excel",
+                    st.session_state['excel_data'],
+                    st.session_state['excel_filename'],
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
