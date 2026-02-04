@@ -7,6 +7,7 @@ import os
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
+import xlsxwriter
 
 # Page config
 st.set_page_config(
@@ -278,7 +279,7 @@ def save_statement(df, month, year, pdf_bytes=None, filename=None):
         "period_name": f"{get_month_name(month)} {year}",
         "total_transactions": len(df),
         "total_expenses": float(df[df["Isplata"] > 0]["Isplata"].sum()),
-        "total_income": float(df[df["Uplata"] > 0]["Uplata"].sum()),
+        "total_income": float(df[(df["Uplata"] > 0) & (df["Primalac/Platilac"].str.contains("FINTECH|FinTech", case=False, na=False))]["Uplata"].sum()),
         "original_filename": filename or "statement.pdf",
         "saved_at": datetime.now().isoformat()
     }
@@ -338,12 +339,56 @@ def get_saved_periods():
     return periods
 
 
+def create_export_data(df):
+    """Create summary export data with categories and brands."""
+    expenses_df = df[df["Isplata"] > 0].copy()
+    expenses_df["Brend"] = expenses_df.apply(
+        lambda row: normalize_merchant(row["Primalac/Platilac"], row["Opis"]), axis=1
+    )
+
+    # Summary by category
+    cat_summary = expenses_df.groupby("Kategorija")["Isplata"].agg(["sum", "count"])
+    cat_summary.columns = ["Ukupno (RSD)", "Br. transakcija"]
+    cat_summary = cat_summary.sort_values("Ukupno (RSD)", ascending=False).reset_index()
+
+    # Summary by brand
+    brand_summary = expenses_df.groupby(["Kategorija", "Brend"])["Isplata"].agg(["sum", "count"])
+    brand_summary.columns = ["Ukupno (RSD)", "Br. transakcija"]
+    brand_summary = brand_summary.sort_values("Ukupno (RSD)", ascending=False).reset_index()
+
+    return cat_summary, brand_summary, expenses_df
+
+
+def create_excel_export(df, period_name=""):
+    """Create Excel file with multiple sheets."""
+    cat_summary, brand_summary, expenses_df = create_export_data(df)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Sheet 1: All transactions
+        df.to_excel(writer, sheet_name='Sve transakcije', index=False)
+
+        # Sheet 2: By category
+        cat_summary.to_excel(writer, sheet_name='Po kategorijama', index=False)
+
+        # Sheet 3: By brand
+        brand_summary.to_excel(writer, sheet_name='Po brendovima', index=False)
+
+        # Auto-fit columns
+        for sheet_name in writer.sheets:
+            worksheet = writer.sheets[sheet_name]
+            worksheet.set_column(0, 10, 20)
+
+    output.seek(0)
+    return output.getvalue()
+
+
 def display_statement(df, period_name=None):
     """Display the statement analysis."""
 
     # Summary metrics
     expenses_df = df[df["Isplata"] > 0].copy()
-    income_df = df[df["Uplata"] > 0].copy()
+    income_df = df[(df["Uplata"] > 0) & (df["Primalac/Platilac"].str.contains("FINTECH|FinTech", case=False, na=False))].copy()
 
     total_expenses = expenses_df["Isplata"].sum()
     total_income = income_df["Uplata"].sum()
@@ -423,28 +468,15 @@ def main():
             pdf_bytes = uploaded_file.read()
             original_filename = uploaded_file.name
 
-            with st.spinner("Parsiram..."):
+            with st.spinner("Parsiram i čuvam..."):
                 df_new = extract_transactions_from_pdf(BytesIO(pdf_bytes))
 
-            if not df_new.empty:
-                month, year = detect_statement_period(df_new)
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    year = st.number_input("God.", value=year or 2025, min_value=2020, max_value=2030)
-                with col2:
-                    month = st.selectbox("Mes.", range(1, 13), index=(month - 1) if month else 0, format_func=get_month_name)
-
-                period_name = f"{get_month_name(month)} {year}"
-                period_key = f"{year}-{month:02d}"
-
-                if (STATEMENTS_DIR / period_key).exists():
-                    st.warning(f"⚠️ {period_name} postoji")
-
-                if st.button("💾 Sačuvaj", type="primary", use_container_width=True):
-                    save_statement(df_new, month, year, pdf_bytes, original_filename)
-                    st.success(f"✅ Sačuvano!")
-                    st.rerun()
+                if not df_new.empty:
+                    month, year = detect_statement_period(df_new)
+                    if month and year:
+                        save_statement(df_new, month, year, pdf_bytes, original_filename)
+                        st.success(f"✅ {get_month_name(month)} {year}")
+                        st.rerun()
 
         st.divider()
 
@@ -469,7 +501,23 @@ def main():
 
             st.divider()
 
-            # Summary
+            # Export button
+            st.subheader("📥 Preuzmi")
+            df_export, _ = load_statement(selected_key)
+            if df_export is not None:
+                selected_name = next(p["name"] for p in saved_periods if p["key"] == selected_key)
+                excel_data = create_excel_export(df_export, selected_name)
+                st.download_button(
+                    "📊 Excel fajl",
+                    excel_data,
+                    f"izvod_{selected_key}.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+
+            st.divider()
+
+            # Summary - at the bottom
             st.caption("📊 Ukupno svi periodi:")
             total_exp = sum(p["expenses"] for p in saved_periods)
             total_inc = sum(p["income"] for p in saved_periods)
