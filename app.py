@@ -29,11 +29,24 @@ LOGO_SVG = """
 
 st.markdown(f"""
 <style>
+    /* Reduce Streamlit default top padding */
+    .main .block-container {{
+        padding-top: 2rem !important;
+        max-width: 100% !important;
+    }}
+    section[data-testid="stSidebar"] {{
+        padding-top: 0 !important;
+    }}
+    section[data-testid="stSidebar"] > div {{
+        padding-top: 1rem !important;
+    }}
+
     .troskomer-header {{
         display: flex;
         align-items: center;
         gap: 12px;
         margin-bottom: 10px;
+        margin-top: -1rem;
     }}
     .troskomer-logo {{
         font-size: 38px !important;
@@ -193,6 +206,57 @@ st.markdown(f"""
     }}
     .metric-positive {{ color: #10b981; }}
     .metric-negative {{ color: #ef4444; }}
+
+    /* ===== MONTH HEADER ===== */
+    .month-header {{
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        color: white;
+        text-align: center;
+    }}
+    .month-header h1 {{
+        margin: 0;
+        font-size: 32px;
+        font-weight: 700;
+        color: white !important;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }}
+    .month-header p {{
+        margin: 8px 0 0 0;
+        opacity: 0.9;
+        font-size: 14px;
+    }}
+
+    /* ===== PAGE LOGO HEADER (faded) ===== */
+    .page-logo {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 8px 0;
+        margin: 0 0 16px 0;
+        opacity: 0.25;
+    }}
+    .page-logo svg {{
+        filter: grayscale(100%);
+    }}
+    .page-logo-text {{
+        font-size: 36px;
+        font-weight: 800;
+        color: #333;
+        letter-spacing: -1px;
+    }}
+
+    @media (max-width: 768px) {{
+        .month-header h1 {{
+            font-size: 24px;
+        }}
+        .page-logo-text {{
+            font-size: 28px;
+        }}
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -701,18 +765,7 @@ def display_statement_classic(df, period_name=None):
     total_income = income_df["Uplata"].sum()
     balance = total_income - total_expenses
 
-    # Compact summary in expander
-    with st.expander(f"📊 **Pregled** — Potrošnja: {total_expenses:,.0f} RSD | Bilans: {balance:+,.0f} RSD", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("💵 Primanja", f"{total_income:,.0f} RSD")
-            st.metric("📊 Bilans", f"{balance:,.0f} RSD", delta=f"{balance:,.0f}")
-        with col2:
-            st.metric("💸 Potrošnja", f"{total_expenses:,.0f} RSD")
-            st.metric("📝 Transakcija", len(df))
-
-    st.subheader("💸 Potrošnja po kategorijama")
-
+    # ===== KATEGORIJE (glavni sadržaj) =====
     category_totals = expenses_df.groupby("Kategorija")["Isplata"].agg(["sum", "count"])
     category_totals.columns = ["Ukupno (RSD)", "Br. transakcija"]
     category_totals = category_totals.sort_values("Ukupno (RSD)", ascending=False)
@@ -748,6 +801,20 @@ def display_statement_classic(df, period_name=None):
                         hide_index=True
                     )
 
+    # ===== BILANS NA DNU =====
+    st.divider()
+    balance_color = "#10b981" if balance >= 0 else "#ef4444"
+    st.markdown(f'''
+    <div style="background: #f8f9fa; border-radius: 8px; padding: 12px 16px; margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 14px;">
+            <span>💵 Primanja: <b>{total_income:,.0f}</b> RSD</span>
+            <span>💸 Potrošnja: <b>{total_expenses:,.0f}</b> RSD</span>
+            <span style="color: {balance_color};">📊 Bilans: <b>{balance:+,.0f}</b> RSD</span>
+            <span>📝 <b>{len(df)}</b> transakcija</span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
 
 def display_statement_cards(df, period_name=None):
     """Display the statement analysis - CARD style."""
@@ -759,37 +826,7 @@ def display_statement_cards(df, period_name=None):
     total_income = income_df["Uplata"].sum()
     balance = total_income - total_expenses
 
-    # Metric cards row
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f'''
-        <div class="metric-card">
-            <div class="metric-card-label">💵 Primanja</div>
-            <div class="metric-card-value">{total_income:,.0f}</div>
-            <div class="metric-card-label">RSD</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'''
-        <div class="metric-card">
-            <div class="metric-card-label">💸 Potrošnja</div>
-            <div class="metric-card-value">{total_expenses:,.0f}</div>
-            <div class="metric-card-label">RSD</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    with col3:
-        balance_class = "metric-positive" if balance >= 0 else "metric-negative"
-        st.markdown(f'''
-        <div class="metric-card">
-            <div class="metric-card-label">📊 Bilans</div>
-            <div class="metric-card-value {balance_class}">{balance:+,.0f}</div>
-            <div class="metric-card-label">RSD</div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Category cards
+    # ===== KATEGORIJE KARTICE =====
     category_totals = expenses_df.groupby("Kategorija")["Isplata"].agg(["sum", "count"])
     category_totals.columns = ["Ukupno (RSD)", "Br. transakcija"]
     category_totals = category_totals.sort_values("Ukupno (RSD)", ascending=False)
@@ -812,7 +849,7 @@ def display_statement_cards(df, period_name=None):
         </div>
         ''', unsafe_allow_html=True)
 
-        # Expander for details (still use expander for drill-down)
+        # Expander for details
         with st.expander("Prikaži detalje", expanded=False):
             cat_transactions = expenses_df[expenses_df["Kategorija"] == category].copy()
             cat_transactions["Brend"] = cat_transactions.apply(
@@ -829,6 +866,20 @@ def display_statement_cards(df, period_name=None):
                 brand_pct = (brand_total / total * 100) if total > 0 else 0
                 st.markdown(f"**{brand}** — {brand_total:,.0f} RSD ({brand_count}) · {brand_pct:.0f}%")
 
+    # ===== BILANS NA DNU =====
+    st.divider()
+    balance_color = "#10b981" if balance >= 0 else "#ef4444"
+    st.markdown(f'''
+    <div style="background: #f8f9fa; border-radius: 8px; padding: 12px 16px;">
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 14px;">
+            <span>💵 Primanja: <b>{total_income:,.0f}</b> RSD</span>
+            <span>💸 Potrošnja: <b>{total_expenses:,.0f}</b> RSD</span>
+            <span style="color: {balance_color};">📊 Bilans: <b>{balance:+,.0f}</b> RSD</span>
+            <span>📝 <b>{len(df)}</b> transakcija</span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
 
 def display_statement_tabs(df, period_name=None):
     """Display the statement analysis - TAB style."""
@@ -839,17 +890,6 @@ def display_statement_tabs(df, period_name=None):
     total_expenses = expenses_df["Isplata"].sum()
     total_income = income_df["Uplata"].sum()
     balance = total_income - total_expenses
-
-    # Compact header with key metrics
-    balance_color = "green" if balance >= 0 else "red"
-    st.markdown(f'''
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-        <span style="font-size: 14px;">💵 <b>{total_income:,.0f}</b> RSD</span>
-        <span style="font-size: 14px;">💸 <b>{total_expenses:,.0f}</b> RSD</span>
-        <span style="font-size: 14px; color: {balance_color};">📊 <b>{balance:+,.0f}</b> RSD</span>
-        <span style="font-size: 14px;">📝 <b>{len(df)}</b> tr.</span>
-    </div>
-    ''', unsafe_allow_html=True)
 
     # Prepare category data
     expenses_df["Brend"] = expenses_df.apply(
@@ -913,6 +953,20 @@ def display_statement_tabs(df, period_name=None):
                     use_container_width=True,
                     hide_index=True
                 )
+
+    # ===== BILANS NA DNU =====
+    st.divider()
+    balance_color = "#10b981" if balance >= 0 else "#ef4444"
+    st.markdown(f'''
+    <div style="background: #f8f9fa; border-radius: 8px; padding: 12px 16px;">
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 14px;">
+            <span>💵 Primanja: <b>{total_income:,.0f}</b> RSD</span>
+            <span>💸 Potrošnja: <b>{total_expenses:,.0f}</b> RSD</span>
+            <span style="color: {balance_color};">📊 Bilans: <b>{balance:+,.0f}</b> RSD</span>
+            <span>📝 <b>{len(df)}</b> transakcija</span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
 
 
 def display_statement(df, period_name=None, design_mode="classic"):
@@ -1053,6 +1107,11 @@ def main():
 
 
     # ===== MAIN CONTENT =====
+
+    # Faded logo at top of page
+    faded_logo_svg = """<svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="45" fill="#1a1a2e" stroke="#667eea" stroke-width="3"/><path d="M25 65 L40 45 L55 55 L75 30" stroke="#667eea" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="75" cy="30" r="5" fill="#764ba2"/><text x="50" y="82" text-anchor="middle" fill="#667eea" font-size="14" font-weight="bold">RSD</text></svg>"""
+    st.markdown(f'<div class="page-logo">{faded_logo_svg}<span class="page-logo-text">Troškomer</span></div>', unsafe_allow_html=True)
+
     if not saved_periods:
         st.markdown('<h1 class="troskomer-logo">Troškomer</h1>', unsafe_allow_html=True)
         st.info("👈 Učitaj prvi izvod preko sidebar-a")
@@ -1075,7 +1134,13 @@ def main():
         df, metadata = load_statement(selected_key)
         if df is not None:
             selected_name = next(p["name"] for p in saved_periods if p["key"] == selected_key)
-            st.title(f"📅 {selected_name}")
+            # Nice gradient month header
+            st.markdown(f'''
+            <div class="month-header">
+                <h1>📅 {selected_name}</h1>
+                <p>Pregled potrošnje</p>
+            </div>
+            ''', unsafe_allow_html=True)
             display_statement(df, selected_name, design_mode)
 
 
