@@ -11,10 +11,43 @@ import xlsxwriter
 
 # Page config
 st.set_page_config(
-    page_title="Analiza Bankovnog Izvoda",
-    page_icon="💰",
+    page_title="Troškomer",
+    page_icon="📊",
     layout="wide"
 )
+
+# Custom CSS and Logo
+LOGO_SVG = """
+<svg width="50" height="50" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="45" fill="#1a1a2e" stroke="#667eea" stroke-width="3"/>
+  <path d="M25 65 L40 45 L55 55 L75 30" stroke="#667eea" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="75" cy="30" r="5" fill="#764ba2"/>
+  <text x="50" y="82" text-anchor="middle" fill="#667eea" font-size="14" font-weight="bold">RSD</text>
+</svg>
+"""
+
+st.markdown(f"""
+<style>
+    .troskomer-header {{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }}
+    .troskomer-logo {{
+        font-size: 38px !important;
+        font-weight: 800 !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        letter-spacing: -1px;
+    }}
+    .troskomer-subtitle {{
+        font-size: 14px !important;
+        color: #666 !important;
+        margin-top: -5px !important;
+    }}
+</style>
+""", unsafe_allow_html=True)
 
 # Data storage folder
 DATA_DIR = Path(__file__).parent / "data"
@@ -279,7 +312,7 @@ def save_statement(df, month, year, pdf_bytes=None, filename=None):
         "period_name": f"{get_month_name(month)} {year}",
         "total_transactions": len(df),
         "total_expenses": float(df[df["Isplata"] > 0]["Isplata"].sum()),
-        "total_income": float(df[(df["Uplata"] > 0) & (df["Primalac/Platilac"].str.contains("FINTECH|FinTech", case=False, na=False))]["Uplata"].sum()),
+        "total_income": float(df[df["Uplata"] > 0]["Uplata"].sum()),
         "original_filename": filename or "statement.pdf",
         "saved_at": datetime.now().isoformat()
     }
@@ -388,7 +421,7 @@ def display_statement(df, period_name=None):
 
     # Summary metrics
     expenses_df = df[df["Isplata"] > 0].copy()
-    income_df = df[(df["Uplata"] > 0) & (df["Primalac/Platilac"].str.contains("FINTECH|FinTech", case=False, na=False))].copy()
+    income_df = df[df["Uplata"] > 0].copy()
 
     total_expenses = expenses_df["Isplata"].sum()
     total_income = income_df["Uplata"].sum()
@@ -452,7 +485,8 @@ def main():
 
     # ===== SIDEBAR =====
     with st.sidebar:
-        st.header("💰 Bankovni Izvodi")
+        st.markdown(f'<div class="troskomer-header">{LOGO_SVG}<h1 class="troskomer-logo">Troškomer</h1></div>', unsafe_allow_html=True)
+        st.markdown('<p class="troskomer-subtitle">Analiza bankovnih izvoda</p>', unsafe_allow_html=True)
         st.divider()
 
         # Upload section
@@ -461,22 +495,28 @@ def main():
             "PDF fajl",
             type="pdf",
             help="Banca Intesa mesečni izvod",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="pdf_uploader"
         )
 
         if uploaded_file is not None:
-            pdf_bytes = uploaded_file.read()
-            original_filename = uploaded_file.name
+            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
 
-            with st.spinner("Parsiram i čuvam..."):
-                df_new = extract_transactions_from_pdf(BytesIO(pdf_bytes))
+            # Check if we already processed this file
+            if st.session_state.get('last_processed_file') != file_id:
+                pdf_bytes = uploaded_file.read()
+                original_filename = uploaded_file.name
 
-                if not df_new.empty:
-                    month, year = detect_statement_period(df_new)
-                    if month and year:
-                        save_statement(df_new, month, year, pdf_bytes, original_filename)
-                        st.success(f"✅ {get_month_name(month)} {year}")
-                        st.rerun()
+                with st.spinner("Parsiram i čuvam..."):
+                    df_new = extract_transactions_from_pdf(BytesIO(pdf_bytes))
+
+                    if not df_new.empty:
+                        month, year = detect_statement_period(df_new)
+                        if month and year:
+                            save_statement(df_new, month, year, pdf_bytes, original_filename)
+                            st.session_state['last_processed_file'] = file_id
+                            st.success(f"✅ {get_month_name(month)} {year}")
+                            st.rerun()
 
         st.divider()
 
@@ -519,21 +559,13 @@ def main():
                     use_container_width=True
                 )
 
-            st.divider()
-
-            # Summary - at the bottom
-            st.caption("📊 Ukupno svi periodi:")
-            total_exp = sum(p["expenses"] for p in saved_periods)
-            total_inc = sum(p["income"] for p in saved_periods)
-            st.metric("Potrošnja", f"{total_exp:,.0f} RSD")
-            st.metric("Primanja", f"{total_inc:,.0f} RSD")
 
     # ===== MAIN CONTENT =====
     if not saved_periods:
-        st.title("💰 Analiza Bankovnog Izvoda")
+        st.markdown('<h1 class="troskomer-logo">Troškomer</h1>', unsafe_allow_html=True)
         st.info("👈 Učitaj prvi izvod preko sidebar-a")
     elif 'selected_key' not in dir() or selected_key is None:
-        st.title("💰 Analiza Bankovnog Izvoda")
+        st.markdown('<h1 class="troskomer-logo">Troškomer</h1>', unsafe_allow_html=True)
         st.info("👈 Odaberi izvod iz liste")
     else:
         # Load and display selected statement
