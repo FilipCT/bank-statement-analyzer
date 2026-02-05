@@ -74,8 +74,13 @@ def gdrive_upload_file(service, filename, content, parent_id, mime_type='text/cs
     # Check if file exists
     file_id = gdrive_find_file(service, filename, parent_id)
 
-    media = MediaIoBaseUpload(BytesIO(content.encode('utf-8') if isinstance(content, str) else content),
-                               mimetype=mime_type, resumable=True)
+    # Prepare content as bytes
+    if isinstance(content, str):
+        content_bytes = content.encode('utf-8')
+    else:
+        content_bytes = content
+
+    media = MediaIoBaseUpload(BytesIO(content_bytes), mimetype=mime_type)
 
     if file_id:
         # Update existing file
@@ -437,8 +442,9 @@ def save_statement(df, month, year, pdf_bytes=None, filename=None):
             gdrive_upload_file(service, "transactions.csv", csv_content, period_folder_id)
             # Upload metadata
             gdrive_upload_file(service, "metadata.json", metadata_content, period_folder_id, 'application/json')
+            st.success(f"✅ Sačuvano na Google Drive")
         except Exception as e:
-            st.warning(f"Greška pri čuvanju na Google Drive: {e}")
+            st.error(f"❌ Google Drive greška: {type(e).__name__}: {e}")
 
     return period_key
 
