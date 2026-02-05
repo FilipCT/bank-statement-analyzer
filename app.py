@@ -125,6 +125,74 @@ st.markdown(f"""
             flex: 1 1 100% !important;
         }}
     }}
+
+    /* ===== CARD DESIGN STYLES ===== */
+    .category-card {{
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #f0f0f0;
+    }}
+    .category-card:hover {{
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }}
+    .category-card-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }}
+    .category-card-title {{
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+    }}
+    .category-card-amount {{
+        font-size: 18px;
+        font-weight: 700;
+        color: #1a1a2e;
+    }}
+    .category-card-meta {{
+        font-size: 12px;
+        color: #888;
+    }}
+    .progress-bar {{
+        height: 6px;
+        background: #f0f0f0;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 8px;
+    }}
+    .progress-fill {{
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        border-radius: 3px;
+    }}
+
+    /* ===== METRIC CARDS ===== */
+    .metric-card {{
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #f0f0f0;
+    }}
+    .metric-card-value {{
+        font-size: 24px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin: 4px 0;
+    }}
+    .metric-card-label {{
+        font-size: 12px;
+        color: #888;
+        text-transform: uppercase;
+    }}
+    .metric-positive {{ color: #10b981; }}
+    .metric-negative {{ color: #ef4444; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -623,10 +691,9 @@ def create_excel_export(df, period_name=""):
     return output.getvalue()
 
 
-def display_statement(df, period_name=None):
-    """Display the statement analysis."""
+def display_statement_classic(df, period_name=None):
+    """Display the statement analysis - CLASSIC style with expanders."""
 
-    # Summary metrics
     expenses_df = df[df["Isplata"] > 0].copy()
     income_df = df[df["Uplata"] > 0].copy()
 
@@ -664,7 +731,6 @@ def display_statement(df, period_name=None):
             merchant_totals.columns = ["Ukupno (RSD)", "Br. kupovina"]
             merchant_totals = merchant_totals.sort_values("Ukupno (RSD)", ascending=False)
 
-            # Show each brand with nested expander for transactions
             for brand in merchant_totals.index:
                 brand_total = merchant_totals.loc[brand, "Ukupno (RSD)"]
                 brand_count = int(merchant_totals.loc[brand, "Br. kupovina"])
@@ -683,9 +749,188 @@ def display_statement(df, period_name=None):
                     )
 
 
+def display_statement_cards(df, period_name=None):
+    """Display the statement analysis - CARD style."""
+
+    expenses_df = df[df["Isplata"] > 0].copy()
+    income_df = df[df["Uplata"] > 0].copy()
+
+    total_expenses = expenses_df["Isplata"].sum()
+    total_income = income_df["Uplata"].sum()
+    balance = total_income - total_expenses
+
+    # Metric cards row
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-card-label">💵 Primanja</div>
+            <div class="metric-card-value">{total_income:,.0f}</div>
+            <div class="metric-card-label">RSD</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-card-label">💸 Potrošnja</div>
+            <div class="metric-card-value">{total_expenses:,.0f}</div>
+            <div class="metric-card-label">RSD</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    with col3:
+        balance_class = "metric-positive" if balance >= 0 else "metric-negative"
+        st.markdown(f'''
+        <div class="metric-card">
+            <div class="metric-card-label">📊 Bilans</div>
+            <div class="metric-card-value {balance_class}">{balance:+,.0f}</div>
+            <div class="metric-card-label">RSD</div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Category cards
+    category_totals = expenses_df.groupby("Kategorija")["Isplata"].agg(["sum", "count"])
+    category_totals.columns = ["Ukupno (RSD)", "Br. transakcija"]
+    category_totals = category_totals.sort_values("Ukupno (RSD)", ascending=False)
+
+    for category in category_totals.index:
+        total = category_totals.loc[category, "Ukupno (RSD)"]
+        count = int(category_totals.loc[category, "Br. transakcija"])
+        pct = (total / total_expenses * 100) if total_expenses > 0 else 0
+
+        st.markdown(f'''
+        <div class="category-card">
+            <div class="category-card-header">
+                <span class="category-card-title">{category}</span>
+                <span class="category-card-amount">{total:,.0f} RSD</span>
+            </div>
+            <div class="category-card-meta">{count} transakcija · {pct:.1f}%</div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {pct}%"></div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        # Expander for details (still use expander for drill-down)
+        with st.expander("Prikaži detalje", expanded=False):
+            cat_transactions = expenses_df[expenses_df["Kategorija"] == category].copy()
+            cat_transactions["Brend"] = cat_transactions.apply(
+                lambda row: normalize_merchant(row["Primalac/Platilac"], row["Opis"]), axis=1
+            )
+
+            merchant_totals = cat_transactions.groupby("Brend")["Isplata"].agg(["sum", "count"])
+            merchant_totals.columns = ["Ukupno (RSD)", "Br. kupovina"]
+            merchant_totals = merchant_totals.sort_values("Ukupno (RSD)", ascending=False)
+
+            for brand in merchant_totals.index:
+                brand_total = merchant_totals.loc[brand, "Ukupno (RSD)"]
+                brand_count = int(merchant_totals.loc[brand, "Br. kupovina"])
+                brand_pct = (brand_total / total * 100) if total > 0 else 0
+                st.markdown(f"**{brand}** — {brand_total:,.0f} RSD ({brand_count}) · {brand_pct:.0f}%")
+
+
+def display_statement_tabs(df, period_name=None):
+    """Display the statement analysis - TAB style."""
+
+    expenses_df = df[df["Isplata"] > 0].copy()
+    income_df = df[df["Uplata"] > 0].copy()
+
+    total_expenses = expenses_df["Isplata"].sum()
+    total_income = income_df["Uplata"].sum()
+    balance = total_income - total_expenses
+
+    # Compact header with key metrics
+    balance_color = "green" if balance >= 0 else "red"
+    st.markdown(f'''
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <span style="font-size: 14px;">💵 <b>{total_income:,.0f}</b> RSD</span>
+        <span style="font-size: 14px;">💸 <b>{total_expenses:,.0f}</b> RSD</span>
+        <span style="font-size: 14px; color: {balance_color};">📊 <b>{balance:+,.0f}</b> RSD</span>
+        <span style="font-size: 14px;">📝 <b>{len(df)}</b> tr.</span>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Prepare category data
+    expenses_df["Brend"] = expenses_df.apply(
+        lambda row: normalize_merchant(row["Primalac/Platilac"], row["Opis"]), axis=1
+    )
+
+    category_totals = expenses_df.groupby("Kategorija")["Isplata"].agg(["sum", "count"])
+    category_totals.columns = ["Ukupno (RSD)", "Br. transakcija"]
+    category_totals = category_totals.sort_values("Ukupno (RSD)", ascending=False)
+
+    # Create tabs for top categories
+    categories = list(category_totals.index)[:8]  # Max 8 tabs
+    if len(categories) == 0:
+        st.info("Nema podataka")
+        return
+
+    # Shorter tab names (just emoji + short name)
+    tab_names = []
+    for cat in categories:
+        parts = cat.split(" ", 1)
+        emoji = parts[0] if len(parts) > 1 else ""
+        name = parts[1] if len(parts) > 1 else cat
+        short_name = name[:10] + ".." if len(name) > 12 else name
+        tab_names.append(f"{emoji} {short_name}")
+
+    tabs = st.tabs(tab_names)
+
+    for i, (tab, category) in enumerate(zip(tabs, categories)):
+        with tab:
+            cat_total = category_totals.loc[category, "Ukupno (RSD)"]
+            cat_count = int(category_totals.loc[category, "Br. transakcija"])
+
+            st.markdown(f"**{cat_total:,.0f} RSD** · {cat_count} transakcija")
+
+            # Brands in this category
+            cat_df = expenses_df[expenses_df["Kategorija"] == category]
+            brand_totals = cat_df.groupby("Brend")["Isplata"].agg(["sum", "count"])
+            brand_totals.columns = ["Ukupno", "Br."]
+            brand_totals = brand_totals.sort_values("Ukupno", ascending=False)
+
+            for brand in brand_totals.index:
+                brand_total = brand_totals.loc[brand, "Ukupno"]
+                brand_count = int(brand_totals.loc[brand, "Br."])
+                brand_pct = (brand_total / cat_total * 100) if cat_total > 0 else 0
+
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"**{brand}**")
+                    st.progress(brand_pct / 100)
+                with col2:
+                    st.markdown(f"{brand_total:,.0f}")
+                    st.caption(f"{brand_count} tr.")
+
+            # Transactions expander
+            with st.expander("📋 Sve transakcije"):
+                cat_trans = cat_df[["Datum", "Brend", "Isplata"]].copy()
+                cat_trans = cat_trans.sort_values("Datum")
+                cat_trans.columns = ["Datum", "Trgovac", "Iznos"]
+                st.dataframe(
+                    cat_trans.style.format({"Iznos": "{:,.0f}"}),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+
+def display_statement(df, period_name=None, design_mode="classic"):
+    """Display the statement analysis with selected design."""
+    if design_mode == "cards":
+        display_statement_cards(df, period_name)
+    elif design_mode == "tabs":
+        display_statement_tabs(df, period_name)
+    else:
+        display_statement_classic(df, period_name)
+
+
 def main():
     # Get saved periods
     saved_periods = get_saved_periods()
+
+    # Default design mode
+    design_mode = "classic"
 
     # ===== SIDEBAR =====
     with st.sidebar:
@@ -795,6 +1040,17 @@ def main():
                 st.session_state['recategorize_success'] = f"✅ Uspešno rekategorizovano {count} izvoda!"
                 st.rerun()
 
+            # Design mode selector
+            st.divider()
+            st.subheader("🎨 Dizajn")
+            design_mode = st.radio(
+                "Izgled:",
+                options=["classic", "cards", "tabs"],
+                format_func=lambda x: {"classic": "📋 Klasičan", "cards": "🃏 Kartice", "tabs": "📑 Tabovi"}[x],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+
 
     # ===== MAIN CONTENT =====
     if not saved_periods:
@@ -820,7 +1076,7 @@ def main():
         if df is not None:
             selected_name = next(p["name"] for p in saved_periods if p["key"] == selected_key)
             st.title(f"📅 {selected_name}")
-            display_statement(df, selected_name)
+            display_statement(df, selected_name, design_mode)
 
 
 if __name__ == "__main__":
