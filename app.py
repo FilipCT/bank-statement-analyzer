@@ -353,6 +353,35 @@ def delete_statement(period_key):
     return False
 
 
+def recategorize_all_statements():
+    """Re-apply categorization rules to all saved statements."""
+    count = 0
+    for period_dir in STATEMENTS_DIR.iterdir():
+        if period_dir.is_dir() and not period_dir.name.startswith('.'):
+            csv_path = period_dir / "transactions.csv"
+            if csv_path.exists():
+                df = pd.read_csv(csv_path)
+                # Re-categorize each transaction
+                df["Kategorija"] = df.apply(
+                    lambda row: categorize_transaction(row["Opis"], row["Primalac/Platilac"]),
+                    axis=1
+                )
+                # Save updated CSV
+                df.to_csv(csv_path, index=False)
+
+                # Update metadata
+                metadata_path = period_dir / "metadata.json"
+                if metadata_path.exists():
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                    metadata["total_expenses"] = float(df[df["Isplata"] > 0]["Isplata"].sum())
+                    metadata["total_income"] = float(df[df["Uplata"] > 0]["Uplata"].sum())
+                    with open(metadata_path, "w", encoding="utf-8") as f:
+                        json.dump(metadata, f, ensure_ascii=False, indent=2)
+                count += 1
+    return count
+
+
 def get_saved_periods():
     """Get list of all saved statement periods."""
     periods = []
@@ -672,6 +701,21 @@ def main():
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
+
+            # Recategorize button (always visible when there are periods)
+            st.divider()
+            st.subheader("🔄 Alati")
+
+            # Show success message if just recategorized
+            if st.session_state.get('recategorize_success'):
+                st.success(st.session_state['recategorize_success'])
+                del st.session_state['recategorize_success']
+
+            if st.button("🔄 Rekategorizuj sve", use_container_width=True, help="Ponovo primeni pravila kategorisanja na sve izvode"):
+                with st.spinner("Rekategorizujem izvode..."):
+                    count = recategorize_all_statements()
+                st.session_state['recategorize_success'] = f"✅ Uspešno rekategorizovano {count} izvoda!"
+                st.rerun()
 
 
     # ===== MAIN CONTENT =====
