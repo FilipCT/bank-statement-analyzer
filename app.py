@@ -634,20 +634,15 @@ def display_statement(df, period_name=None):
     total_income = income_df["Uplata"].sum()
     balance = total_income - total_expenses
 
-    # Metrics row - 2x2 grid works better on mobile
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("💵 Primanja", f"{total_income:,.0f} RSD")
-    with col2:
-        st.metric("💸 Potrošnja", f"{total_expenses:,.0f} RSD")
-
-    col3, col4 = st.columns(2)
-    with col3:
-        st.metric("📊 Bilans", f"{balance:,.0f} RSD", delta=f"{balance:,.0f}")
-    with col4:
-        st.metric("📝 Transakcija", len(df))
-
-    st.divider()
+    # Compact summary in expander
+    with st.expander(f"📊 **Pregled** — Potrošnja: {total_expenses:,.0f} RSD | Bilans: {balance:+,.0f} RSD", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("💵 Primanja", f"{total_income:,.0f} RSD")
+            st.metric("📊 Bilans", f"{balance:,.0f} RSD", delta=f"{balance:,.0f}")
+        with col2:
+            st.metric("💸 Potrošnja", f"{total_expenses:,.0f} RSD")
+            st.metric("📝 Transakcija", len(df))
 
     st.subheader("💸 Potrošnja po kategorijama")
 
