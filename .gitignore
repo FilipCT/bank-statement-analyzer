@@ -1,0 +1,21 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Data - sada je repo privatan, OK za upload
+# data/
+
+# Debug scripts
+debug_*.py
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
