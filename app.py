@@ -323,32 +323,16 @@ st.markdown("""
     }
 
     /* ===== MONTH NAVIGATION - RESPONSIVE ===== */
-    /* Mobile: fancy circular arrows */
     @media (max-width: 768px) {
+        /* Smaller, nicer buttons on mobile */
         .main .stButton button[kind="secondary"] {
-            font-size: 20px !important;
-            padding: 8px 12px !important;
-            border-radius: 50% !important;
-            width: 44px !important;
-            height: 44px !important;
-            min-height: 44px !important;
+            font-size: 12px !important;
+            padding: 10px 14px !important;
+            border-radius: 20px !important;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
             border: none !important;
             color: white !important;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25) !important;
-            transition: all 0.3s ease !important;
-            overflow: hidden !important;
-        }
-        .main .stButton button[kind="secondary"]:hover {
-            transform: scale(1.1) !important;
-            box-shadow: 0 6px 18px rgba(102, 126, 234, 0.35) !important;
-        }
-        /* Hide month name text on mobile, show only arrow */
-        .main .stButton button[kind="secondary"] p {
-            font-size: 0 !important;
-        }
-        .main .stButton button[kind="secondary"] p::first-letter {
-            font-size: 20px !important;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2) !important;
         }
     }
 
@@ -366,30 +350,59 @@ st.markdown("""
     }
 </style>
 <script>
-    // Auto-collapse sidebar on mobile after navigation
-    const checkMobile = () => window.innerWidth <= 768;
-
-    if (checkMobile()) {
-        // Find sidebar collapse button and click it after navigation
-        const observer = new MutationObserver(() => {
-            const sidebar = document.querySelector('section[data-testid="stSidebar"]');
-            const collapseBtn = document.querySelector('[data-testid="stSidebarCollapseButton"]');
-            if (sidebar && collapseBtn && sidebar.getAttribute('aria-expanded') === 'true') {
-                // Small delay to allow navigation to complete
-                setTimeout(() => {
-                    if (checkMobile()) {
-                        collapseBtn.click();
-                    }
-                }, 100);
-            }
-        });
-
-        // Watch for page changes
-        const targetNode = document.body;
-        if (targetNode) {
-            observer.observe(targetNode, { childList: true, subtree: true });
+    // Auto-collapse sidebar on mobile after navigation (Safari compatible)
+    (function() {
+        function isMobile() {
+            return window.innerWidth <= 768;
         }
-    }
+
+        function collapseSidebar() {
+            if (!isMobile()) return;
+
+            // Try multiple selectors for Streamlit sidebar close button
+            var selectors = [
+                'button[data-testid="baseButton-headerNoPadding"]',
+                'button[aria-label="Close sidebar"]',
+                'section[data-testid="stSidebar"] button[kind="header"]',
+                '[data-testid="stSidebarCollapsedControl"]'
+            ];
+
+            for (var i = 0; i < selectors.length; i++) {
+                var btn = document.querySelector(selectors[i]);
+                if (btn) {
+                    btn.click();
+                    return;
+                }
+            }
+
+            // Fallback: try to find any close-like button in sidebar header
+            var sidebar = document.querySelector('section[data-testid="stSidebar"]');
+            if (sidebar) {
+                var headerBtn = sidebar.querySelector('button');
+                if (headerBtn) {
+                    headerBtn.click();
+                }
+            }
+        }
+
+        // Listen for clicks on sidebar
+        document.addEventListener('click', function(e) {
+            var target = e.target;
+            // Check if click was on a sidebar button
+            while (target && target !== document) {
+                if (target.tagName === 'BUTTON') {
+                    var sidebar = document.querySelector('section[data-testid="stSidebar"]');
+                    if (sidebar && sidebar.contains(target)) {
+                        if (isMobile()) {
+                            setTimeout(collapseSidebar, 200);
+                        }
+                        return;
+                    }
+                }
+                target = target.parentNode;
+            }
+        }, true);
+    })();
 </script>
 """, unsafe_allow_html=True)
 
