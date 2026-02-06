@@ -2,63 +2,157 @@
 
 Aplikacija za analizu bankovnih izvoda iz Banca Intesa banke. Parsira PDF izvode, automatski kategorizuje transakcije i prikazuje statistiku potrošnje.
 
-## Funkcionalnosti
+## Stranice aplikacije
 
-### Učitavanje izvoda
+### 🏠 Početna (Ukupna statistika)
+- Rang lista kategorija sortirana po maksimalnoj potrošnji
+- Za svaku kategoriju: max iznos, prosek, top brend
+- "Gde najviše trošiš?" highlight sekcija
+- Export u Excel (svi izvodi)
+
+### 📂 Izvodi
 - Upload PDF izvoda iz Banca Intesa
-- Automatsko parsiranje tabela sa transakcijama
-- Detekcija perioda (mesec/godina) iz datuma transakcija
-- Čuvanje parsiranih podataka lokalno (CSV + metadata)
+- Pregled sačuvanih izvoda (grupisano po godinama)
+- Brisanje pojedinačnih ili svih izvoda
+- Rekategorizacija svih izvoda
 
-### Kategorisanje transakcija
-Automatsko kategorisanje na osnovu ključnih reči:
-- 🏥 **Apoteke** - LILLY, BENU, APOTEKA...
-- 🩺 **Zdravstveni pregledi i analize** - MEDILAB, MEDILEK, FIZIOKINETIKPR...
-- 🛒 **Marketi** - LIDL, MAXI, IDEA, TEMPO...
-- 🧴 **Drogerije** - DM
-- ⛽ **Gorivo** - NIS, MOL, OMV...
-- 👗 **Odeća i obuća** - ZARA, H&M, NEW YORKER, TAKKO...
-- 📱 **Računi i usluge** - A1, EPS, INFOSTAN, vrtić...
-- 🍔 **Restorani i dostava** - WOLT, GLOVO, kafići, pekare...
-- 💵 **Gotovina (ATM)** - podizanje novca
-- 🚗 **Putarine** - PUTEVI SRBIJE
-- 📚 **Knjižare** - LAGUNA, VULKAN, DELFI
-- 💻 **Tech i pretplate** - APPLE, NETFLIX, SPOTIFY, OPENAI...
-- 🏠 **Stanovanje** - stambena zajednica
-- ⛷️ **Sport i rekreacija** - skijalista, fitness
-- 💇 **Lepota i nega** - saloni
-- 🦷 **Zdravlje** - stomatolog
-- 🏦 **Transferi** - bezgotovinski prenos
-- 💰 **Primanja** - plata
-- 💱 **Menjačnica** - devizni račun
-- ❓ **Ostalo** - nekategorisano
-
-### Normalizacija brendova
-Grupisanje različitih naziva u jedan brend:
-- "LIDL CACAK", "LIDL 123" → **LIDL**
-- "TAKKOFASHION", "TAKKO" → **TAKKO FASHION**
-- "A1 SRBIJA", "A1 265" → **A1**
-- itd.
-
-### Prikaz pojedinačnog meseca
-- Header sa nazivom meseca (gradient dizajn)
+### 📅 Mesečni prikaz
+- Navigacija po mesecima (prev/next kartice)
 - Kategorije sa iznosima (expandable)
 - Brendovi unutar svake kategorije
-- Pojedinačne transakcije
-- Bilans na dnu (primanja, potrošnja, bilans, broj transakcija)
+- Pojedinačne transakcije u tabeli
+- Bilans na dnu (primanja, potrošnja, bilans)
+- **Mapiranje iz "Ostalo"** - direktno mapiranje nekategorisanih transakcija
+- Export u Excel
 
-### Ukupna statistika (svi meseci)
-- Rang lista kategorija sortirana po max mesecu
-- Za svaku kategoriju:
-  - Max iznos i u kom mesecu
-  - Prosek (samo meseci sa potrošnjom)
-  - Top brend sa statistikom
-- "Gde najviše trošiš?" sekcija
+### ⚙️ Podešavanja
+- Upravljanje kategorijama i ključnim rečima
+- Upravljanje brendovima i varijantama
+- Pregled nemapranih trgovaca
+- Reset na podrazumevane vrednosti
 
-### Dodatne opcije
-- **Rekategorizuj sve** - ponovo primeni pravila kategorisanja
-- **Export u Excel** - sve transakcije, po kategorijama, po brendovima
-- **3 dizajna** - Klasičan (expanders), Kartice, Tabovi
+## Kako radi kategorizacija i mapiranje
+
+### Dva koncepta
+
+| Koncept | Svrha | Gde se podešava |
+|---------|-------|-----------------|
+| **Kategorija** | U koju grupu spada transakcija (Marketi, Restorani...) | Podešavanja → Kategorije |
+| **Brend** | Kako se prikazuje naziv trgovca | Podešavanja → Mapiranje brendova |
+
+### Tok kategorizacije
+
+```
+Transakcija: "LIDL CACAK 123"
+     │
+     ▼
+┌─────────────────────────────────────┐
+│ 1. KATEGORIZACIJA                   │
+│    Traži ključnu reč u tekstu       │
+│    "LIDL" pronađeno → 🛒 Marketi    │
+└─────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────┐
+│ 2. NORMALIZACIJA BRENDA             │
+│    Traži varijantu u tekstu         │
+│    "LIDL" pronađeno → prikaži LIDL  │
+└─────────────────────────────────────┘
+     │
+     ▼
+Rezultat: Kategorija "🛒 Marketi", Brend "LIDL"
+```
+
+### Mapiranje novog trgovca
+
+Kada se pojavi nov trgovac (npr. `KAFANACACAK 688`):
+
+1. **Pojavljuje se u "❓ Ostalo"** jer nema ključnu reč koja ga prepoznaje
+
+2. **Mapiranje iz Mesečnog prikaza:**
+   - Otvori "❓ Ostalo" kategoriju
+   - Pronađi trgovca
+   - Unesi jednostavnu ključnu reč: `KAFANA`
+   - Izaberi kategoriju: `🍔 Restorani i dostava`
+   - Unesi naziv brenda: `KAFANA ČAČAK`
+   - Klikni "Mapiraj"
+
+3. **Šta se dešava:**
+   - Ključna reč `KAFANA` se dodaje u kategoriju "Restorani"
+   - Brend `KAFANA ČAČAK` se kreira sa varijantom `KAFANA`
+   - Svi izvodi se automatski rekategorizuju
+   - Transakcija se premešta iz "Ostalo" u "Restorani"
+
+### Saveti za mapiranje
+
+- **Ključna reč** treba da bude što kraća i jedinstvena
+  - ✅ Dobro: `KAFANA`, `LIDL`, `WOLT`
+  - ❌ Loše: `KAFANACACAK 688 BEOGRAD` (previše specifično)
+
+- **Brend** je naziv koji će se prikazivati
+  - Može biti čitljiviji od originala
+  - Npr. `JKP VODOVOD` umesto `"VODOVOD"JKP CACAK 123`
+
+## Podešavanja kategorija
+
+### Dodavanje nove kategorije
+1. Idi na ⚙️ Podešavanja → Kategorije
+2. Unesi naziv (npr. `🎮 Gaming`)
+3. Unesi prvu ključnu reč (npr. `STEAM`)
+4. Klikni "Dodaj kategoriju"
+
+### Izmena postojeće kategorije
+1. Otvori expander kategorije
+2. Izmeni naziv ili ključne reči
+3. Klikni "💾 Sačuvaj sve izmene"
+4. Automatski se rekategorizuju svi izvodi
+
+## Podešavanja brendova
+
+### Dodavanje novog brenda
+1. Idi na ⚙️ Podešavanja → Mapiranje brendova
+2. Unesi naziv brenda (npr. `JKP VODOVOD`)
+3. Unesi varijantu (npr. `VODOVOD`)
+4. Opciono izaberi kategoriju
+5. Klikni "Dodaj brend"
+
+### Nemapirani trgovci
+Na dnu stranice Podešavanja nalazi se lista trgovaca koji se pojavljuju u transakcijama ali nemaju mapiranje. Odatle možeš:
+- **➕ Novi brend** - kreira brend sa nazivom trgovca
+- **📎 Postojeći** - dodaje kao varijantu postojećeg brenda
+
+## Struktura podataka
+
+```
+data/
+├── categories.json      # Kategorije i ključne reči
+├── brand_mapping.json   # Brendovi i varijante
+└── statements/
+    ├── 2025-08/
+    │   ├── transactions.csv
+    │   ├── metadata.json
+    │   └── statement.pdf
+    ├── 2025-09/
+    └── ...
+```
+
+### categories.json
+```json
+{
+  "🛒 Marketi": ["LIDL", "MAXI", "IDEA", "TEMPO"],
+  "🍔 Restorani i dostava": ["WOLT", "GLOVO", "KAFANA"],
+  ...
+}
+```
+
+### brand_mapping.json
+```json
+{
+  "LIDL": ["LIDL", "LIDL CACAK", "LIDL123"],
+  "KAFANA ČAČAK": ["KAFANA", "KAFANACACAK"],
+  ...
+}
+```
 
 ## Tehnički stack
 
@@ -99,50 +193,6 @@ streamlit run app.py
 - Podaci se čuvaju u `data/` folderu
 - Na Streamlit Cloud, filesystem je ephemeral (briše se pri redeploy-u)
 - Za trajno čuvanje: commit `data/` folder u repo
-- Upload novog izvoda radi privremeno dok ne redeploy-uješ
-
-## Struktura projekta
-
-```
-bank-statement-analyzer/
-├── app.py              # Glavna aplikacija
-├── requirements.txt    # Python dependencies
-├── README.md          # Dokumentacija
-├── .gitignore         # Git ignore
-└── data/
-    └── statements/
-        ├── 2025-08/
-        │   ├── transactions.csv
-        │   ├── metadata.json
-        │   └── statement.pdf
-        ├── 2025-09/
-        ├── 2025-10/
-        └── ...
-```
-
-## Dodavanje novih kategorija/ključnih reči
-
-U `app.py`, pronađi `CATEGORIES` dictionary i dodaj ključne reči:
-
-```python
-CATEGORIES = {
-    "🛒 Marketi": [
-        "LIDL", "MAXI", "NOVA_KLJUCNA_REC"  # dodaj ovde
-    ],
-    # ...
-}
-```
-
-Za normalizaciju brendova, koristi `BRAND_MAPPING`:
-
-```python
-BRAND_MAPPING = {
-    "LIDL": ["LIDL", "LIDL CACAK", "LIDL123"],  # sve varijante
-    # ...
-}
-```
-
-Posle izmena, klikni "🔄 Rekategorizuj sve" da se primeni na postojeće izvode.
 
 ## Responsive dizajn
 
@@ -150,16 +200,6 @@ Aplikacija je prilagođena za mobilne uređaje:
 - Kompaktni prikaz na malim ekranima
 - Scrollable tabele
 - Touch-friendly expanders
-
-## Budući razvoj
-
-Moguća poboljšanja:
-- [ ] Grafikon potrošnje po mesecima
-- [ ] Poređenje meseci
-- [ ] Dark mode podrška za logo/tekst
-- [ ] Cloud storage integracija (Google Sheets, Supabase)
-- [ ] Automatsko prepoznavanje novih trgovaca
-- [ ] Budget/limit upozorenja
 
 ## Autor
 
