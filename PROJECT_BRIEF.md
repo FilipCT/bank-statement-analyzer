@@ -1,7 +1,7 @@
 # Project Brief
 
 ## Project Name
-(Kratko, radno ime projekta)
+(Short, working name of the project)
 
 ---
 
