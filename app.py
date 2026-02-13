@@ -882,13 +882,34 @@ def page_pocetna():
         st.info("Nema podataka za prikaz")
         return
 
-    expenses_df = all_df[all_df["Isplata"] > 0].copy()
-    income_df = all_df[all_df["Uplata"] > 0].copy()
+    # Extract years from periods and add year selector
+    all_df["Godina"] = all_df["Period"].str.split("-").str[0]
+    available_years = sorted(all_df["Godina"].unique(), reverse=True)
+
+    # Year selector
+    year_options = ["Sve godine"] + available_years
+    selected_year = st.selectbox(
+        "📅 Izaberi godinu",
+        year_options,
+        index=0,
+        key="stats_year_selector"
+    )
+
+    # Filter by selected year
+    if selected_year != "Sve godine":
+        filtered_df = all_df[all_df["Godina"] == selected_year].copy()
+        filtered_periods = [p for p in saved_periods if p["key"].startswith(selected_year)]
+    else:
+        filtered_df = all_df.copy()
+        filtered_periods = saved_periods
+
+    expenses_df = filtered_df[filtered_df["Isplata"] > 0].copy()
+    income_df = filtered_df[filtered_df["Uplata"] > 0].copy()
 
     total_expenses = expenses_df["Isplata"].sum()
     total_income = income_df["Uplata"].sum()
     balance = total_income - total_expenses
-    num_periods = len(saved_periods)
+    num_periods = len(filtered_periods)
 
     # Category stats
     expenses_df = expenses_df[expenses_df["Kategorija"] != "❓ Ostalo"]
@@ -980,12 +1001,13 @@ def page_pocetna():
                             st.write(f"• **{brand}** — Max: {brand_max:,.0f} ({brand_max_month}) | Prosek: {brand_avg:,.0f}")
 
     # Ukupna potrošnja card at the END
+    card_title = f"Potrošnja {selected_year}" if selected_year != "Sve godine" else "Ukupna potrošnja"
     st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
     st.markdown(f"""
     <div class="intesa-card">
         <div class="intesa-card-header">
             <div>
-                <p class="intesa-card-title">Ukupna potrošnja</p>
+                <p class="intesa-card-title">{card_title}</p>
                 <p class="intesa-card-amount">{total_expenses:,.0f} RSD</p>
                 <p class="intesa-card-subtitle">Ukupno potrošeno ({num_periods} meseci)</p>
             </div>
@@ -1004,18 +1026,21 @@ def page_pocetna():
         </div>
         <div class="intesa-card-row">
             <span class="intesa-card-label">📝 Transakcija</span>
-            <span class="intesa-card-value">{len(all_df)}</span>
+            <span class="intesa-card-value">{len(filtered_df)}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Excel download for all data
+    # Excel download for filtered data
     st.markdown("")
-    excel_data = create_excel_export(all_df, "Ukupna statistika")
+    excel_title = f"Statistika {selected_year}" if selected_year != "Sve godine" else "Ukupna statistika"
+    excel_data = create_excel_export(filtered_df, excel_title)
+    excel_filename = f"statistika_{selected_year}.xlsx" if selected_year != "Sve godine" else "ukupna_statistika.xlsx"
+    excel_button_text = f"📥 Preuzmi Excel ({selected_year})" if selected_year != "Sve godine" else "📥 Preuzmi Excel (svi izvodi)"
     st.download_button(
-        "📥 Preuzmi Excel (svi izvodi)",
+        excel_button_text,
         excel_data,
-        "ukupna_statistika.xlsx",
+        excel_filename,
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
@@ -1291,14 +1316,21 @@ def page_mesecni_prikaz():
 
                         # Get original merchant name for mapping
                         original_merchant = cat_transactions[cat_transactions["Brend"] == brand]["Primalac/Platilac"].iloc[0]
-                        default_keyword = str(original_merchant).upper().replace("\n", " ").strip()[:30]
+                        # Extract first word as suggested keyword (simpler = better)
+                        raw_merchant = str(original_merchant).upper().replace("\n", " ").strip()
+                        first_word = raw_merchant.split()[0] if raw_merchant.split() else raw_merchant[:15]
+                        default_keyword = first_word[:20]  # Max 20 chars for keyword
+                        default_brand = first_word.title()  # Capitalize for brand name
 
-                        # Use form for reliable submission
+                        # Use form for reliable submission with explicit keys
                         with st.form(key=f"map_form_{brand_key}"):
+                            st.caption(f"Original: {raw_merchant[:50]}{'...' if len(raw_merchant) > 50 else ''}")
+
                             keyword_input = st.text_input(
-                                "Ključna reč (po čemu da se prepoznaje):",
+                                "Ključna reč (kratka, npr. 'POREZNA'):",
                                 value=default_keyword,
-                                help="Jednostavnija reč = bolje (npr. 'KAFANA' umesto 'KAFANACACAK 688')"
+                                key=f"kw_{brand_key}",
+                                help="KRATKA reč = bolje! Npr. 'POREZNA' umesto 'POREZNA IMOV.OBV...'"
                             )
 
                             col1, col2 = st.columns(2)
@@ -1306,12 +1338,15 @@ def page_mesecni_prikaz():
                                 cat_options = ["— Izaberi —"] + list(categories_list.keys())
                                 target_category = st.selectbox(
                                     "Dodaj u kategoriju:",
-                                    cat_options
+                                    cat_options,
+                                    key=f"cat_{brand_key}"
                                 )
                             with col2:
                                 brand_display = st.text_input(
-                                    "Prikaži kao (brend):",
-                                    value=brand if brand != "Nepoznato" else default_keyword.split()[0] if default_keyword else ""
+                                    "Prikaži kao brend:",
+                                    value=default_brand,
+                                    key=f"brand_{brand_key}",
+                                    help="Čitljiv naziv, npr. 'Porez na imovinu'"
                                 )
 
                             submitted = st.form_submit_button("✅ Mapiraj", use_container_width=True, type="primary")
@@ -1350,10 +1385,9 @@ def page_mesecni_prikaz():
 
                                     # Auto recategorize
                                     count = recategorize_all_statements()
-                                    st.info(f"DEBUG: Rekategorizovano {count} izvoda")
 
-                                    st.success(f"✅ Mapirano! '{keyword_val}' → {cat_val}, brend '{brand_val}'")
-                                    st.warning("⚠️ Kliknite bilo gde na stranici ili pritisnite F5 da osvežite prikaz")
+                                    # Auto refresh
+                                    st.rerun()
         else:
             # Regular category expander
             with st.expander(f"{category} — **{total:,.0f} RSD** ({count})", expanded=False):
